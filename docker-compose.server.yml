@@ -1,0 +1,64 @@
+services:
+  capswriter-server-models:
+    image: capswriter-server:latest
+    build:
+      context: .
+      dockerfile: docker/server/Dockerfile
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${CAPSWRITER_GPU_DEVICE_COUNT:-all}
+              capabilities: [gpu]
+    environment:
+      CAPSWRITER_MODEL_TYPE: ${CAPSWRITER_MODEL_TYPE:-qwen_asr}
+      CAPSWRITER_INFERENCE_HARDWARE: ${CAPSWRITER_INFERENCE_HARDWARE:-auto}
+      CAPSWRITER_REMOVE_MODEL_ARCHIVES: ${CAPSWRITER_REMOVE_MODEL_ARCHIVES:-false}
+    volumes:
+      - ./models:/app/models
+    command: ["python", "docker/server/download_models.py"]
+
+  capswriter-server:
+    image: capswriter-server:latest
+    build:
+      context: .
+      dockerfile: docker/server/Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${CAPSWRITER_GPU_DEVICE_COUNT:-all}
+              capabilities: [gpu]
+    environment:
+      CAPSWRITER_MODEL_TYPE: ${CAPSWRITER_MODEL_TYPE:-qwen_asr}
+      CAPSWRITER_INFERENCE_HARDWARE: ${CAPSWRITER_INFERENCE_HARDWARE:-auto}
+      CAPSWRITER_SERVER_ADDR: 0.0.0.0
+      CAPSWRITER_SERVER_PORT: ${CAPSWRITER_SERVER_PORT:-6016}
+      CAPSWRITER_ENABLE_TRAY: "false"
+      CAPSWRITER_LOG_LEVEL: ${CAPSWRITER_LOG_LEVEL:-INFO}
+      CAPSWRITER_LOG_DIR: /app/logs
+      CAPSWRITER_NUM_THREADS: ${CAPSWRITER_NUM_THREADS:-4}
+      CAPSWRITER_FUNASR_DML_ENABLE: "false"
+      CAPSWRITER_FUNASR_VULKAN_ENABLE: ${CAPSWRITER_FUNASR_VULKAN_ENABLE:-true}
+      CAPSWRITER_QWEN_USE_DML: "false"
+      CAPSWRITER_QWEN_VULKAN_ENABLE: ${CAPSWRITER_QWEN_VULKAN_ENABLE:-true}
+      CAPSWRITER_INTERACTIVE_ERRORS: "false"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics
+    ports:
+      - "${CAPSWRITER_SERVER_PORT:-6016}:${CAPSWRITER_SERVER_PORT:-6016}"
+    volumes:
+      - ./models:/app/models
+      - ./hot-server.txt:/app/hot-server.txt
+      - capswriter-server-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "docker/server/healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20m
+      retries: 5
+
+volumes:
+  capswriter-server-logs:
