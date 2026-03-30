@@ -13,7 +13,15 @@ class Logger:
     _loggers = {}
 
     @classmethod
-    def setup(cls, name: str, log_dir: str = None, level: str = 'INFO', max_bytes: int = 10 * 1024 * 1024, backup_count: int = 5, log_filename: str = None):
+    def setup(
+        cls,
+        name: str,
+        log_dir: str = None,
+        level: str = "INFO",
+        max_bytes: int = 10 * 1024 * 1024,
+        backup_count: int = 5,
+        log_filename: str = None,
+    ):
         """
         设置并返回一个日志记录器
 
@@ -51,34 +59,32 @@ class Logger:
 
         # 确定日志目录
         if log_dir is None:
-            from config_client import BASE_DIR
-            log_dir = os.path.join(BASE_DIR, 'logs')
+            log_dir = cls._resolve_default_log_dir()
 
         # 创建日志目录
         Path(log_dir).mkdir(parents=True, exist_ok=True)
 
         # 日志文件名（包含日期）
         if log_filename:
-             file_name_prefix = log_filename
+            file_name_prefix = log_filename
         elif not name:
-             file_name_prefix = 'root'
+            file_name_prefix = "root"
         else:
-             file_name_prefix = name
-        
-        log_file = os.path.join(log_dir, f'{file_name_prefix}_{datetime.now().strftime("%Y%m%d")}.log')
+            file_name_prefix = name
+
+        log_file = os.path.join(
+            log_dir, f"{file_name_prefix}_{datetime.now().strftime('%Y%m%d')}.log"
+        )
 
         # 创建格式化器
         formatter = logging.Formatter(
-            fmt='%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
-            datefmt='%H:%M:%S'
+            fmt="%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
+            datefmt="%H:%M:%S",
         )
 
         # 文件处理器（带轮转）
         file_handler = RotatingFileHandler(
-            log_file,
-            maxBytes=max_bytes,
-            backupCount=backup_count,
-            encoding='utf-8'
+            log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
         )
         file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)
@@ -88,6 +94,23 @@ class Logger:
         cls._loggers[name] = logger
 
         return logger
+
+    @staticmethod
+    def _resolve_default_log_dir() -> str:
+        env_log_dir = os.getenv("CAPSWRITER_LOG_DIR")
+        if env_log_dir:
+            return env_log_dir
+
+        for module_name in ("config_server", "config_client"):
+            try:
+                module = __import__(module_name, fromlist=["BASE_DIR"])
+                base_dir = getattr(module, "BASE_DIR", None)
+                if base_dir:
+                    return os.path.join(base_dir, "logs")
+            except Exception:
+                continue
+
+        return os.path.join(os.getcwd(), "logs")
 
     @classmethod
     def get_logger(cls, name: str):
@@ -103,12 +126,12 @@ class Logger:
         if name not in cls._loggers:
             # 如果 logger 还没有被初始化，先创建一个默认的（INFO 级别）
             # 之后 core_client.py/core_server.py 会用正确的级别重新初始化
-            return cls.setup(name, level='INFO')
+            return cls.setup(name, level="INFO")
         return cls._loggers[name]
 
 
 # 便捷函数
-def setup_logger(name: str, log_dir: str = None, level: str = 'INFO', **kwargs):
+def setup_logger(name: str, log_dir: str = None, level: str = "INFO", **kwargs):
     """设置日志记录器的便捷函数"""
     return Logger.setup(name, log_dir, level, **kwargs)
 

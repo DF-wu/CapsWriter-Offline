@@ -5,6 +5,7 @@
 检查配置的语音模型文件是否存在，如果不存在则提供下载链接。
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -15,13 +16,26 @@ from util.common.lifecycle import lifecycle
 from . import logger
 
 
+def _pause_if_interactive() -> None:
+    if os.getenv("CAPSWRITER_INTERACTIVE_ERRORS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        input("按回车退出")
+        return
+
+    if os.isatty(0):
+        input("按回车退出")
+
 
 def check_model() -> None:
     """
     根据配置的模型类型检查所需的模型文件是否存在
-    
+
     如果模型文件不存在，显示错误信息和下载链接后退出程序。
-    
+
     Raises:
         SystemExit: 当模型类型不支持或模型文件缺失时退出
     """
@@ -29,35 +43,35 @@ def check_model() -> None:
     logger.debug(f"检查模型文件, 类型: {model_type}")
 
     # 根据模型类型确定需要检查的文件
-    if model_type == 'fun_asr_nano':
+    if model_type == "fun_asr_nano":
         required_files = {
-            'Fun-ASR-Nano-GGUF 模型文件': [
+            "Fun-ASR-Nano-GGUF 模型文件": [
                 ModelPaths.fun_asr_nano_gguf_encoder_adaptor,
                 ModelPaths.fun_asr_nano_gguf_ctc,
                 ModelPaths.fun_asr_nano_gguf_llm_decode,
                 ModelPaths.fun_asr_nano_gguf_token,
             ]
         }
-    elif model_type == 'sensevoice':
+    elif model_type == "sensevoice":
         required_files = {
-            'SenseVoice 模型文件': [
+            "SenseVoice 模型文件": [
                 ModelPaths.sensevoice_model,
                 ModelPaths.sensevoice_tokens,
             ]
         }
-    elif model_type == 'paraformer':
+    elif model_type == "paraformer":
         required_files = {
-            'Paraformer 模型文件': [
+            "Paraformer 模型文件": [
                 ModelPaths.paraformer_model,
                 ModelPaths.paraformer_tokens,
             ],
-            '标点模型文件': [
+            "标点模型文件": [
                 ModelPaths.punc_model_dir,
-            ]
+            ],
         }
-    elif model_type == 'qwen_asr':
+    elif model_type == "qwen_asr":
         required_files = {
-            'Qwen-ASR-GGUF 模型文件': [
+            "Qwen-ASR-GGUF 模型文件": [
                 ModelPaths.qwen3_asr_gguf_encoder_frontend,
                 ModelPaths.qwen3_asr_gguf_encoder_backend,
                 ModelPaths.qwen3_asr_gguf_llm_decode,
@@ -66,17 +80,20 @@ def check_model() -> None:
     else:
         error_msg = f"不支持的模型类型: {Config.model_type}"
         logger.error(error_msg)
-        console.print(f'''
+        console.print(
+            f"""
     [bold red]不支持的模型类型：{Config.model_type}[/bold red]
 
-    请在 config_server.py 中将 ServerConfig.model_type 设置为：
+    请通过环境变量 CAPSWRITER_MODEL_TYPE 或 config_server.py 中的 ServerConfig.model_type 设置为：
     - 'fun_asr_nano'
     - 'sensevoice'
     - 'paraformer'
     - 'qwen_asr'
 
-        ''', style='bright_red')
-        input('按回车退出')
+        """,
+            style="bright_red",
+        )
+        _pause_if_interactive()
         lifecycle.cleanup()
         sys.exit(1)
 
@@ -90,26 +107,31 @@ def check_model() -> None:
 
     # 如果有缺失的文件，显示错误信息并提供下载链接
     if missing_files:
-        error_msg = f'\n    [bold red]未能找到模型文件[/bold red]\n\n'
+        error_msg = f"\n    [bold red]未能找到模型文件[/bold red]\n\n"
         for category, file_path in missing_files:
-            error_msg += f'    [{category}]\n'
-            error_msg += f'    未找到：{file_path}\n\n'
+            error_msg += f"    [{category}]\n"
+            error_msg += f"    未找到：{file_path}\n\n"
 
-        error_msg += f'    当前配置的模型类型：[bold yellow]{model_type}[/bold yellow]\n\n'
+        error_msg += (
+            f"    当前配置的模型类型：[bold yellow]{model_type}[/bold yellow]\n\n"
+        )
 
         # 提供统一下载页面链接
-        error_msg += f'    [cyan]请前往模型发布页下载缺失文件：[/cyan]\n'
-        error_msg += f'    [cyan]{ModelDownloadLinks.models_page}[/cyan]\n\n'
+        error_msg += f"    [cyan]请前往模型发布页下载缺失文件：[/cyan]\n"
+        error_msg += f"    [cyan]{ModelDownloadLinks.models_page}[/cyan]\n\n"
+        error_msg += "    [cyan]Docker 部署可运行 docker/server/download_models.py 自动下载。[/cyan]\n\n"
 
-        error_msg += f'    下载后请根据发布页说明，解压到：[cyan]{ModelPaths.model_dir}[/cyan]\n'
-        error_msg += '    \n'
-        
+        error_msg += (
+            f"    下载后请根据发布页说明，解压到：[cyan]{ModelPaths.model_dir}[/cyan]\n"
+        )
+        error_msg += "    \n"
+
         logger.error(f"模型文件检查失败，共 {len(missing_files)} 个文件缺失")
         console.print(error_msg)
-        input('按回车退出')
+        _pause_if_interactive()
         lifecycle.cleanup()
         sys.exit(1)
 
     # 所有检查通过
     logger.info(f"模型文件检查通过 ({model_type})")
-    console.print(f'[green4]模型文件检查通过 ({model_type})', end='\n\n')
+    console.print(f"[green4]模型文件检查通过 ({model_type})", end="\n\n")
