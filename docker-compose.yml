@@ -1,21 +1,4 @@
 services:
-  capswriter-server-models:
-    image: ${CAPSWRITER_SERVER_IMAGE:-ghcr.io/df-wu/capswriter-offline-server:latest}
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: ${CAPSWRITER_GPU_DEVICE_COUNT:-all}
-              capabilities: [gpu]
-    environment:
-      CAPSWRITER_MODEL_TYPE: ${CAPSWRITER_MODEL_TYPE:-qwen_asr}
-      CAPSWRITER_INFERENCE_HARDWARE: ${CAPSWRITER_INFERENCE_HARDWARE:-auto}
-      CAPSWRITER_REMOVE_MODEL_ARCHIVES: ${CAPSWRITER_REMOVE_MODEL_ARCHIVES:-false}
-    volumes:
-      - ./models:/app/models
-    command: ["python", "docker/server/download_models.py"]
-
   capswriter-server:
     image: ${CAPSWRITER_SERVER_IMAGE:-ghcr.io/df-wu/capswriter-offline-server:latest}
     restart: unless-stopped
@@ -24,22 +7,38 @@ services:
         reservations:
           devices:
             - driver: nvidia
+              # all = request visible GPUs; 0 = CPU-only startup
               count: ${CAPSWRITER_GPU_DEVICE_COUNT:-all}
               capabilities: [gpu]
     environment:
+      # qwen_asr (default) | fun_asr_nano
       CAPSWRITER_MODEL_TYPE: ${CAPSWRITER_MODEL_TYPE:-qwen_asr}
+
+      # auto = prefer GPU and fall back to CPU; gpu = try GPU first; cpu = force CPU
       CAPSWRITER_INFERENCE_HARDWARE: ${CAPSWRITER_INFERENCE_HARDWARE:-auto}
+
+      # true = remove downloaded archives after extraction
+      CAPSWRITER_REMOVE_MODEL_ARCHIVES: ${CAPSWRITER_REMOVE_MODEL_ARCHIVES:-false}
+
       CAPSWRITER_SERVER_ADDR: 0.0.0.0
       CAPSWRITER_SERVER_PORT: ${CAPSWRITER_SERVER_PORT:-6016}
+
       CAPSWRITER_ENABLE_TRAY: "false"
       CAPSWRITER_LOG_LEVEL: ${CAPSWRITER_LOG_LEVEL:-INFO}
       CAPSWRITER_LOG_DIR: /app/logs
+
+      # shared thread hint for CPU-bound stages
       CAPSWRITER_NUM_THREADS: ${CAPSWRITER_NUM_THREADS:-4}
+
       CAPSWRITER_FUNASR_DML_ENABLE: "false"
+
+      # controls GGUF decoder backend, not ONNX encoder/CTC
       CAPSWRITER_FUNASR_VULKAN_ENABLE: ${CAPSWRITER_FUNASR_VULKAN_ENABLE:-true}
       CAPSWRITER_QWEN_USE_DML: "false"
       CAPSWRITER_QWEN_VULKAN_ENABLE: ${CAPSWRITER_QWEN_VULKAN_ENABLE:-true}
+
       CAPSWRITER_INTERACTIVE_ERRORS: "false"
+
       NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics
     ports:
       - "${CAPSWRITER_SERVER_PORT:-6016}:${CAPSWRITER_SERVER_PORT:-6016}"
