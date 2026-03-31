@@ -170,14 +170,24 @@ class FunASRNanoGGUFArgs:
     )  # 是否强制 FP32 计算（如果 GPU 是 Intel 集显且出现精度溢出，可设为 True）
 
     # 模型细节
-    enable_ctc = True  # 是否启用 CTC 热词检索
-    n_predict = 512  # LLM 最大生成 token 数
+    enable_ctc = _env_bool(
+        "CAPSWRITER_FUNASR_ENABLE_CTC", True
+    )  # 是否启用 CTC 热词检索
+    n_predict = (
+        _env_optional_int("CAPSWRITER_FUNASR_N_PREDICT", 512) or 512
+    )  # LLM 最大生成 token 数
     n_threads = _env_optional_int(
         "CAPSWRITER_NUM_THREADS", None
     )  # 线程数，None 表示自动
-    similar_threshold = 0.6  # 热词相似度阈值
-    max_hotwords = 20  # 每次替换的最大热词数
-    pad_to = 30  # 开启 DirectML 加速时，短音频统一填充到指定长度，有加速效果
+    similar_threshold = float(
+        os.getenv("CAPSWRITER_FUNASR_SIMILAR_THRESHOLD", "0.6")
+    )  # 热词相似度阈值
+    max_hotwords = (
+        _env_optional_int("CAPSWRITER_FUNASR_MAX_HOTWORDS", 20) or 20
+    )  # 每次替换的最大热词数
+    pad_to = (
+        _env_optional_int("CAPSWRITER_FUNASR_PAD_TO", 30) or 30
+    )  # GPU/DML 预热填充长度（秒）
     verbose = False
 
 
@@ -204,11 +214,20 @@ class Qwen3ASRGGUFArgs:
     )  # 是否强制 FP32 计算（如果 GPU 是 Intel 集显且出现精度溢出，可设为 True）
 
     # 模型细节
-    n_predict = 512  # LLM 最大生成 token 数
+    n_predict = (
+        _env_optional_int("CAPSWRITER_QWEN_N_PREDICT", 512) or 512
+    )  # LLM 最大生成 token 数
     n_threads = _env_optional_int(
         "CAPSWRITER_NUM_THREADS", None
     )  # 线程数，None 表示自动
-    n_ctx = 2048  # 上下文窗口大小
-    chunk_size = 80.0  # 分段长度（秒）
-    pad_to = 30  # 开启 DirectML 加速时，短音频统一填充到指定长度，有加速效果
+    n_ctx = _env_optional_int("CAPSWRITER_QWEN_N_CTX", 2048) or 2048  # 上下文窗口大小
+    chunk_size = float(
+        os.getenv("CAPSWRITER_QWEN_CHUNK_SIZE", "80.0")
+    )  # 分段长度（秒）
+    memory_num = (
+        _env_optional_int("CAPSWRITER_QWEN_MEMORY_NUM", 1) or 1
+    )  # 参与拼接的历史记忆片段数
+    pad_to = (
+        _env_optional_int("CAPSWRITER_QWEN_PAD_TO", 30) or 30
+    )  # GPU/DML 预热填充长度（秒）
     verbose = False
