@@ -6,8 +6,12 @@ configure_backend() {
   llama_backend="cpu"
 
   gpu_visible="false"
+  nvidia_visible="false"
   if [ -e /dev/nvidiactl ] || [ -d /dev/dri ]; then
     gpu_visible="true"
+  fi
+  if [ -e /dev/nvidiactl ]; then
+    nvidia_visible="true"
   fi
 
   if [ "$inference_hardware" = "cpu" ]; then
@@ -22,11 +26,20 @@ configure_backend() {
     export CAPSWRITER_LLAMA_BACKEND="vulkan"
     export CAPSWRITER_QWEN_VULKAN_ENABLE="true"
     export CAPSWRITER_FUNASR_VULKAN_ENABLE="true"
+    if [ "$nvidia_visible" = "true" ]; then
+      export CAPSWRITER_QWEN_USE_CUDA="true"
+      export CAPSWRITER_FUNASR_USE_CUDA="true"
+    else
+      export CAPSWRITER_QWEN_USE_CUDA="false"
+      export CAPSWRITER_FUNASR_USE_CUDA="false"
+    fi
     echo "[capswriter] GPU runtime detected, preferring Vulkan backend"
   else
     export CAPSWRITER_LLAMA_BACKEND="cpu"
     export CAPSWRITER_QWEN_VULKAN_ENABLE="false"
     export CAPSWRITER_FUNASR_VULKAN_ENABLE="false"
+    export CAPSWRITER_QWEN_USE_CUDA="false"
+    export CAPSWRITER_FUNASR_USE_CUDA="false"
     if [ "$inference_hardware" = "gpu" ] || [ "$inference_hardware" = "auto" ]; then
       echo "[capswriter] GPU runtime unavailable, falling back to CPU backend"
     else
@@ -36,10 +49,9 @@ configure_backend() {
 }
 
 fallback_to_cpu() {
-  export CAPSWRITER_LLAMA_BACKEND="cpu"
-  export CAPSWRITER_QWEN_VULKAN_ENABLE="false"
-  export CAPSWRITER_FUNASR_VULKAN_ENABLE="false"
-  echo "[capswriter] GPU backend probe failed, retrying with CPU backend"
+  export CAPSWRITER_QWEN_USE_CUDA="false"
+  export CAPSWRITER_FUNASR_USE_CUDA="false"
+  echo "[capswriter] ONNX GPU probe failed, retrying with CPU ONNX while keeping llama backend"
 }
 
 configure_backend

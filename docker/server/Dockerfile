@@ -1,8 +1,11 @@
-FROM python:3.11-slim-bookworm@sha256:420310dd2ff7895895f0f1f9d15cae5a95dabceb8f1d6b9a23ef33c2c1c542c3
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:${PATH}" \
     CAPSWRITER_MODEL_TYPE=qwen_asr \
     CAPSWRITER_ENABLE_TRAY=false \
     CAPSWRITER_SERVER_ADDR=0.0.0.0 \
@@ -11,15 +14,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CAPSWRITER_INTERACTIVE_ERRORS=false
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tini python3-tk libgomp1 libvulkan1 \
+    && apt-get install -y --no-install-recommends python3 python3-venv python3-pip python3-tk tini libgomp1 libvulkan1 ca-certificates \
+    && python3 -m venv /opt/venv \
+    && /opt/venv/bin/python -m pip install --upgrade pip setuptools wheel \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY requirements-server-docker.txt /app/requirements-server-docker.txt
 
-RUN python -m pip install --upgrade pip setuptools wheel \
-    && python -m pip install -r /app/requirements-server-docker.txt
+RUN python -m pip install -r /app/requirements-server-docker.txt
 
 COPY . /app
 
