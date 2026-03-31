@@ -4,6 +4,8 @@ Linux- and Docker-focused server fork of [HaujetZhao/CapsWriter-Offline](https:/
 
 This fork keeps the upstream recognition stack and deployment model where it makes sense, but repackages the **server side** for Linux hosts, containers, and GPU-enabled machines.
 
+**Current release priority:** this fork is currently optimized first for **Tesla P4 / Pascal-class NVIDIA GPUs** running on Linux Docker. Wider GPU compatibility remains a follow-up task.
+
 ## Overview
 
 The upstream project is a polished offline speech input tool built primarily for Windows desktop use. This fork exists for a different deployment target:
@@ -39,7 +41,18 @@ This fork closes that gap. Its goal is simple: make the server side easier to bu
 - downloads required model assets at container startup,
 - prefers GPU inference when available,
 - falls back to CPU when GPU inference is unavailable or fails backend probing,
-- provides a single `docker-compose.server.yml` entry point.
+- provides a single `docker-compose.yml` entry point.
+
+### Current deployment target
+
+At the moment, the most thoroughly validated GPU path is:
+
+- Linux
+- Docker
+- NVIDIA Tesla P4 / Pascal
+- `qwen_asr` and `fun_asr_nano`
+
+The public image is published with that target in mind.
 
 ### What this fork does not do
 
@@ -134,38 +147,26 @@ CAPSWRITER_SERVER_PORT=6016
 
 The repository-root `.env` file is for local deployment only. It is excluded from the Docker build context and is not baked into the image.
 
-### 2. Build the image
+### 2. Start the default server
 
 ```bash
-docker compose -f docker-compose.server.yml build
+docker compose up -d capswriter-server
 ```
 
-### 3. Start the default server
-
-```bash
-docker compose -f docker-compose.server.yml up -d capswriter-server
-```
-
-### 4. Switch to `fun_asr_nano`
+### 3. Switch to `fun_asr_nano`
 
 ```bash
 CAPSWRITER_MODEL_TYPE=fun_asr_nano \
 CAPSWRITER_INFERENCE_HARDWARE=auto \
-docker compose -f docker-compose.server.yml up -d --force-recreate capswriter-server
+docker compose up -d --force-recreate capswriter-server
 ```
 
-### 5. Start in CPU-only mode
+### 4. Start in CPU-only mode
 
 ```bash
 CAPSWRITER_GPU_DEVICE_COUNT=0 \
 CAPSWRITER_INFERENCE_HARDWARE=auto \
-docker compose -f docker-compose.server.yml up -d --force-recreate capswriter-server
-```
-
-### 6. Download assets without starting the server
-
-```bash
-docker compose -f docker-compose.server.yml run --rm capswriter-server-models
+docker compose up -d --force-recreate capswriter-server
 ```
 
 ## Startup flow
@@ -181,6 +182,8 @@ At runtime, the container does the following:
 7. starts the server and exposes health status.
 
 This order is intentional. It reduces “start and hope” behavior and makes failure handling more predictable.
+
+There is no separate helper service in Compose. Starting `capswriter-server` is enough.
 
 ## Who this fork is for
 
@@ -207,6 +210,12 @@ This fork extends the upstream server deployment story. It does not replace the 
 This fork is intentionally narrow in scope.
 
 It is meant to make the **server** easier to deploy on Linux. It is not meant to become a general-purpose rewrite of the whole project.
+
+## TODO
+
+- validate the current GPU line on newer NVIDIA architectures beyond Pascal,
+- decide whether a single GPU image line is sufficient or whether multiple runtime tags should be published,
+- revisit broader Linux GPU compatibility after the Pascal/P4 path is stable in real use.
 
 ## Acknowledgements
 

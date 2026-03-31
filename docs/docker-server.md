@@ -11,7 +11,7 @@
 ## 內容物
 
 - `docker/server/Dockerfile`：Server 專用 production image
-- `docker-compose.server.yml`：本機啟動與模型準備
+- `docker-compose.yml`：本機啟動與模型準備
 - `docker/server/download_models.py`：自動下載官方模型資產
 - `docker/server/healthcheck.py`：容器健康檢查
 - `requirements-server-docker.txt`：Linux/headless 最小依賴集
@@ -23,9 +23,11 @@
 - Docker 內強制關閉 tray、DirectML；Vulkan / CPU 由 runtime 自動判斷
 - 模型掛載到 `./models`，日誌持久化到 Docker named volume
 
+> 目前公開 image 的優先目標是 **Tesla P4 / Pascal** 這類已驗證硬體。其他 GPU 世代的廣泛相容性仍列為後續 TODO。
+
 這樣做是為了先得到最穩定、最容易在 Linux 上落地的 server 版本。
 
-這個 image 會在**容器啟動時自動下載缺失模型**；若模型是 `qwen_asr` 或 `fun_asr_nano`，也會一併自動準備對應的 Linux `llama.cpp` 共享庫。`CAPSWRITER_INFERENCE_HARDWARE=auto` 時，容器會先偵測 GPU runtime：有可見 GPU 就優先用 Vulkan backend，沒有就自動回退 CPU backend。
+這個 image 會在**容器啟動時自動下載缺失模型**；若模型是 `qwen_asr` 或 `fun_asr_nano`，也會一併自動準備對應的 Linux `llama.cpp` 共享庫。`CAPSWRITER_INFERENCE_HARDWARE=auto` 時，容器會先偵測 GPU runtime：有可見 GPU 就優先用 Vulkan backend，沒有就自動回退 CPU backend。對 Pascal / P4，這個 image 也會優先嘗試把 ONNX encoder / CTC 放到 CUDA 上。
 
 ## 啟動前準備
 
@@ -48,7 +50,7 @@ ghcr.io/df-wu/capswriter-offline-server:latest
 ## 2. 啟動 Server
 
 ```bash
-docker compose -f docker-compose.server.yml up -d capswriter-server
+docker compose up -d capswriter-server
 ```
 
 預設會在容器啟動時自動下載 `qwen_asr` 所需模型，並以 `CAPSWRITER_INFERENCE_HARDWARE=auto` 進行 GPU 優先啟動。
@@ -83,21 +85,9 @@ Compose 層額外提供 `CAPSWRITER_GPU_DEVICE_COUNT`：
 - `all`：向容器請求 GPU（預設）
 - `0`：不向容器請求 GPU，適合 CPU-only 啟動
 
-如果你想預先把模型抓好，也可以手動執行：
+不需要額外的 helper service。啟動 `capswriter-server` 時，容器會自動下載缺失模型與 backend。
 
-```bash
-docker compose -f docker-compose.server.yml run --rm capswriter-server-models
-```
-
-## 3. 預抓模型 / backend
-
-如果你想先把模型與 backend 下載好，再啟動主服務：
-
-```bash
-docker compose -f docker-compose.server.yml run --rm capswriter-server-models
-```
-
-## 4. 直接使用 image
+## 3. 直接使用 image
 
 如果你要直接使用 image，也可以：
 
@@ -126,11 +116,11 @@ docker run -d --name capswriter-server \
   ghcr.io/df-wu/capswriter-offline-server:latest
 ```
 
-## 5. 查看狀態
+## 4. 查看狀態
 
 ```bash
-docker compose -f docker-compose.server.yml ps
-docker compose -f docker-compose.server.yml logs -f capswriter-server
+docker compose ps
+docker compose logs -f capswriter-server
 ```
 
 健康檢查通過後，Server 會在：
@@ -145,10 +135,10 @@ ws://127.0.0.1:${CAPSWRITER_SERVER_PORT}
 ws://127.0.0.1:6016
 ```
 
-## 6. 停止
+## 5. 停止
 
 ```bash
-docker compose -f docker-compose.server.yml down
+docker compose down
 ```
 
 ## Production 設計說明
@@ -202,3 +192,8 @@ docker compose -f docker-compose.server.yml down
 1. `docker compose ps` 顯示 `healthy`
 2. logs 出現模型載入完成與 WebSocket 監聽訊息
 3. 本機可以連到對應 port
+
+## TODO
+
+- 驗證更新的 NVIDIA GPU 世代是否同樣適合這條 CUDA 11.8 / ORT 1.18 image 線
+- 視驗證結果決定是否維持單一 public image，或改成多個硬體相容 tag
