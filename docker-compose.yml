@@ -14,6 +14,9 @@ services:
       # qwen_asr (default) | fun_asr_nano
       CAPSWRITER_MODEL_TYPE: ${CAPSWRITER_MODEL_TYPE:-qwen_asr}
 
+      # qwen preset: default | low_vram_gpu
+      CAPSWRITER_QWEN_PRESET: ${CAPSWRITER_QWEN_PRESET:-default}
+
       # auto = prefer GPU and fall back to CPU; gpu = try GPU first; cpu = force CPU
       CAPSWRITER_INFERENCE_HARDWARE: ${CAPSWRITER_INFERENCE_HARDWARE:-auto}
 
@@ -36,6 +39,12 @@ services:
       CAPSWRITER_FUNASR_VULKAN_ENABLE: ${CAPSWRITER_FUNASR_VULKAN_ENABLE:-true}
       CAPSWRITER_QWEN_USE_DML: "false"
       CAPSWRITER_QWEN_VULKAN_ENABLE: ${CAPSWRITER_QWEN_VULKAN_ENABLE:-true}
+
+      # expert-only qwen llama overrides; leave empty to follow preset
+      CAPSWRITER_QWEN_LLAMA_N_BATCH: ${CAPSWRITER_QWEN_LLAMA_N_BATCH:-}
+      CAPSWRITER_QWEN_LLAMA_N_UBATCH: ${CAPSWRITER_QWEN_LLAMA_N_UBATCH:-}
+      CAPSWRITER_QWEN_LLAMA_FLASH_ATTN: ${CAPSWRITER_QWEN_LLAMA_FLASH_ATTN:-}
+      CAPSWRITER_QWEN_LLAMA_OFFLOAD_KQV: ${CAPSWRITER_QWEN_LLAMA_OFFLOAD_KQV:-}
 
       CAPSWRITER_INTERACTIVE_ERRORS: "false"
 
