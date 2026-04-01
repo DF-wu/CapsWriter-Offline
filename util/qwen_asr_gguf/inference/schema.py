@@ -100,6 +100,10 @@ class ASREngineConfig:
     n_ctx: int = 2048  # 对于 ASR Decoder，每秒音频+文字，约占 20 个 token
     chunk_size: float = 40.0  # 每个片段 40s，对应 800 个 token
     memory_num: int = 1  # 记忆一个片段，转录一个片段，对应 1600 个 token
+    llama_n_batch: int = 4096
+    llama_n_ubatch: int = 512
+    llama_flash_attn: bool = True
+    llama_offload_kqv: bool = True
     verbose: bool = True
     enable_aligner: bool = False
     align_config: Optional[AlignerConfig] = None

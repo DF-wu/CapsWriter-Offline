@@ -72,7 +72,7 @@ class QwenASREngine:
 
         # 3. 构造 Prompt 并解码
         # context 在 Qwen _build_prompt_embd 中被放入 System Prompt 区域
-        full_embd = self.engine._build_prompt_embd(
+        full_embd, _ = self.engine._build_prompt_embd(
             audio_embd=audio_embd,
             prefix_text="",  # 这里的 prefix_text 是 Assistant 已说的内容，流式分段时通常为空或使用 context
             context=context,
@@ -108,7 +108,12 @@ def create_asr_engine(
     use_dml: bool = False,
     n_ctx: int = 2048,
     chunk_size: float = 40.0,
+    memory_num: int = 1,
     pad_to: int = 30,
+    llama_n_batch: int = 4096,
+    llama_n_ubatch: int = 512,
+    llama_flash_attn: bool = True,
+    llama_offload_kqv: bool = True,
     vulkan_enable: bool = True,
     vulkan_force_fp32: bool = False,
     verbose: bool = True,
@@ -125,7 +130,12 @@ def create_asr_engine(
         use_dml=use_dml,
         n_ctx=n_ctx,
         chunk_size=chunk_size,
+        memory_num=memory_num,
         pad_to=pad_to,
+        llama_n_batch=llama_n_batch,
+        llama_n_ubatch=llama_n_ubatch,
+        llama_flash_attn=llama_flash_attn,
+        llama_offload_kqv=llama_offload_kqv,
         vulkan_enable=vulkan_enable,
         vulkan_force_fp32=vulkan_force_fp32,
         verbose=verbose,

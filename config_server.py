@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 
 # 版本信息
 __version__ = "2.5-alpha"
@@ -37,6 +37,75 @@ def _env_optional_int(name: str, default: Optional[int]) -> Optional[int]:
     if not value:
         return default
     return int(value)
+
+
+def _env_present(name: str) -> bool:
+    value = os.getenv(name)
+    return value is not None and bool(value.strip())
+
+
+def _env_optional_float(name: str, default: Optional[float]) -> Optional[float]:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    value = value.strip()
+    if not value:
+        return default
+    return float(value)
+
+
+def _qwen_preset_name() -> str:
+    value = _env_str("CAPSWRITER_QWEN_PRESET", "default").lower()
+    if value in {"balanced", "quality"}:
+        return "default"
+    return value
+
+
+def _qwen_preset_defaults() -> dict[str, object]:
+    preset = _qwen_preset_name()
+    presets = {
+        "default": {
+            "n_ctx": 2048,
+            "chunk_size": 40.0,
+            "memory_num": 1,
+            "pad_to": 30,
+            "n_predict": 512,
+            "llama_n_batch": 4096,
+            "llama_n_ubatch": 512,
+            "llama_flash_attn": True,
+            "llama_offload_kqv": True,
+        },
+        "low_vram_gpu": {
+            "n_ctx": 2048,
+            "chunk_size": 40.0,
+            "memory_num": 1,
+            "pad_to": 30,
+            "n_predict": 512,
+            "llama_n_batch": 4096,
+            "llama_n_ubatch": 512,
+            "llama_flash_attn": True,
+            "llama_offload_kqv": False,
+        },
+    }
+    return presets.get(preset, presets["default"])
+
+
+def _qwen_preset_int(env_name: str, preset_key: str, fallback: int) -> int:
+    if _env_present(env_name):
+        return _env_optional_int(env_name, fallback) or fallback
+    return int(cast(int, _qwen_preset_defaults().get(preset_key, fallback)))
+
+
+def _qwen_preset_float(env_name: str, preset_key: str, fallback: float) -> float:
+    if _env_present(env_name):
+        return _env_optional_float(env_name, fallback) or fallback
+    return float(cast(float, _qwen_preset_defaults().get(preset_key, fallback)))
+
+
+def _qwen_preset_bool(env_name: str, preset_key: str, fallback: bool) -> bool:
+    if _env_present(env_name):
+        return _env_bool(env_name, fallback)
+    return bool(cast(bool, _qwen_preset_defaults().get(preset_key, fallback)))
 
 
 # 服务端配置
@@ -200,6 +269,8 @@ class Qwen3ASRGGUFArgs:
     encoder_backend_fn = ModelPaths.qwen3_asr_gguf_encoder_backend.name
     llm_fn = ModelPaths.qwen3_asr_gguf_llm_decode.name
 
+    preset = _qwen_preset_name()
+
     use_cuda = _env_bool("CAPSWRITER_QWEN_USE_CUDA", False)
 
     # 显卡加速
@@ -215,19 +286,33 @@ class Qwen3ASRGGUFArgs:
 
     # 模型细节
     n_predict = (
-        _env_optional_int("CAPSWRITER_QWEN_N_PREDICT", 512) or 512
+        _qwen_preset_int("CAPSWRITER_QWEN_N_PREDICT", "n_predict", 512) or 512
     )  # LLM 最大生成 token 数
     n_threads = _env_optional_int(
         "CAPSWRITER_NUM_THREADS", None
     )  # 线程数，None 表示自动
-    n_ctx = _env_optional_int("CAPSWRITER_QWEN_N_CTX", 2048) or 2048  # 上下文窗口大小
-    chunk_size = float(
-        os.getenv("CAPSWRITER_QWEN_CHUNK_SIZE", "80.0")
+    n_ctx = (
+        _qwen_preset_int("CAPSWRITER_QWEN_N_CTX", "n_ctx", 2048) or 2048
+    )  # 上下文窗口大小
+    chunk_size = _qwen_preset_float(
+        "CAPSWRITER_QWEN_CHUNK_SIZE", "chunk_size", 80.0
     )  # 分段长度（秒）
     memory_num = (
-        _env_optional_int("CAPSWRITER_QWEN_MEMORY_NUM", 1) or 1
+        _qwen_preset_int("CAPSWRITER_QWEN_MEMORY_NUM", "memory_num", 1) or 1
     )  # 参与拼接的历史记忆片段数
     pad_to = (
-        _env_optional_int("CAPSWRITER_QWEN_PAD_TO", 30) or 30
+        _qwen_preset_int("CAPSWRITER_QWEN_PAD_TO", "pad_to", 30) or 30
     )  # GPU/DML 预热填充长度（秒）
+    llama_n_batch = _qwen_preset_int(
+        "CAPSWRITER_QWEN_LLAMA_N_BATCH", "llama_n_batch", 4096
+    )
+    llama_n_ubatch = _qwen_preset_int(
+        "CAPSWRITER_QWEN_LLAMA_N_UBATCH", "llama_n_ubatch", 512
+    )
+    llama_flash_attn = _qwen_preset_bool(
+        "CAPSWRITER_QWEN_LLAMA_FLASH_ATTN", "llama_flash_attn", True
+    )
+    llama_offload_kqv = _qwen_preset_bool(
+        "CAPSWRITER_QWEN_LLAMA_OFFLOAD_KQV", "llama_offload_kqv", True
+    )
     verbose = False
