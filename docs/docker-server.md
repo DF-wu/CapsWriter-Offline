@@ -70,6 +70,15 @@ CAPSWRITER_MODEL_TYPE=fun_asr_nano
 
 第一次冷啟動可能需要比較久，因為容器會先下載模型與 `llama.cpp` 共享庫，再啟動服務。
 
+### Qwen preset
+
+`CAPSWRITER_QWEN_PRESET` 目前只保留兩個正式選項：
+
+- `default`：一般使用的主力預設
+- `low_vram_gpu`：保留 ONNX GPU，加上 CPU llama，降低顯存壓力
+
+舊的 `balanced` / `quality` 目前只作為相容別名，會映射到 `default`。
+
 ### Inference hardware 策略
 
 - `CAPSWRITER_INFERENCE_HARDWARE=auto`：預設值。容器內看得到 GPU runtime 時優先走 Vulkan，否則回退 CPU。
@@ -171,6 +180,7 @@ docker compose down
 
 - `CAPSWRITER_SERVER_IMAGE`
 - `CAPSWRITER_MODEL_TYPE`
+- `CAPSWRITER_QWEN_PRESET`
 - `CAPSWRITER_INFERENCE_HARDWARE`
 - `CAPSWRITER_SERVER_PORT`
 - `CAPSWRITER_LOG_LEVEL`

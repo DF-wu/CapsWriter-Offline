@@ -128,6 +128,15 @@ This fork also addresses deployment-level issues that matter in containers:
 - `CAPSWRITER_GPU_DEVICE_COUNT=all` — request GPU devices (default)
 - `CAPSWRITER_GPU_DEVICE_COUNT=0` — request no GPU devices; useful for CPU-only startup
 
+## Qwen presets
+
+Qwen now exposes two user-facing presets through `CAPSWRITER_QWEN_PRESET`:
+
+- `default` — the main preset and the recommended starting point
+- `low_vram_gpu` — keeps ONNX on GPU but leaves llama on CPU to reduce VRAM pressure
+
+The older names `balanced` and `quality` are kept as compatibility aliases and resolve to `default`.
+
 ## Quick start
 
 ### 1. Create a local `.env`
@@ -140,6 +149,7 @@ Default values:
 
 ```env
 CAPSWRITER_MODEL_TYPE=qwen_asr
+CAPSWRITER_QWEN_PRESET=default
 CAPSWRITER_INFERENCE_HARDWARE=auto
 CAPSWRITER_GPU_DEVICE_COUNT=all
 CAPSWRITER_SERVER_PORT=6016
