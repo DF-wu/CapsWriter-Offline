@@ -3,6 +3,7 @@ set -eu
 
 configure_backend() {
   inference_hardware="${CAPSWRITER_INFERENCE_HARDWARE:-${CAPSWRITER_GPU_MODE:-auto}}"
+  qwen_preset="${CAPSWRITER_QWEN_PRESET:-balanced}"
   llama_backend="cpu"
 
   gpu_visible="false"
@@ -34,6 +35,12 @@ configure_backend() {
       export CAPSWRITER_FUNASR_USE_CUDA="false"
     fi
     echo "[capswriter] GPU runtime detected, preferring Vulkan backend"
+
+    if [ "$qwen_preset" = "low_vram_gpu" ]; then
+      export CAPSWRITER_QWEN_VULKAN_ENABLE="false"
+      export CAPSWRITER_QWEN_USE_CUDA="true"
+      echo "[capswriter] qwen preset low_vram_gpu enabled: ONNX on GPU, llama on CPU"
+    fi
   else
     export CAPSWRITER_LLAMA_BACKEND="cpu"
     export CAPSWRITER_QWEN_VULKAN_ENABLE="false"

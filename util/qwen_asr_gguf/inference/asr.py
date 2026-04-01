@@ -82,7 +82,13 @@ class QwenASREngine:
         self.model = llama.LlamaModel(llm_gguf)
         self.embedding_table = llama.get_token_embeddings_gguf(llm_gguf)
         self.ctx = llama.LlamaContext(
-            self.model, n_ctx=config.n_ctx, n_batch=4096, embeddings=False
+            self.model,
+            n_ctx=config.n_ctx,
+            n_batch=config.llama_n_batch,
+            n_ubatch=config.llama_n_ubatch,
+            embeddings=False,
+            flash_attn=config.llama_flash_attn,
+            offload_kqv=config.llama_offload_kqv,
         )
 
         # 缓存 Token ID
@@ -91,6 +97,10 @@ class QwenASREngine:
         self.ID_AUDIO_START = self.model.token_to_id("<|audio_start|>")
         self.ID_AUDIO_END = self.model.token_to_id("<|audio_end|>")
         self.ID_ASR_TEXT = self.model.token_to_id("<asr_text>")
+
+        self._token_cache = {}
+        self._prefix_embd_cache = {}
+        self._suffix_head_embd_cache = {}
 
     def shutdown(self):
         if self.verbose:
@@ -103,51 +113,82 @@ class QwenASREngine:
         context: Optional[str],
         language: Optional[str],
     ):
-        """构造用于 LLM 输入的 Embedding 序列 (区块化打包模式)"""
+        def tk_cached(text: str) -> list[int]:
+            cached = self._token_cache.get(text)
+            if cached is None:
+                cached = self.model.tokenize(text)
+                self._token_cache[text] = cached
+            return cached
 
-        def tk(t):
-            return self.model.tokenize(t)
+        t_prompt_start = time.perf_counter()
 
-        # 1. 区块 A: 音频之前的所有内容 (System + User Header)
-        prefix_str = f"system\n{context or 'You are a helpful assistant.'}"
-        prefix_tokens = (
-            [self.ID_IM_START]
-            + tk(prefix_str)
-            + [self.ID_IM_END]
-            + [self.ID_IM_START]
-            + tk("user\n")
-            + [self.ID_AUDIO_START]
+        context_key = context or "You are a helpful assistant."
+        prefix_embd = self._prefix_embd_cache.get(context_key)
+        t_static_start = time.perf_counter()
+        if prefix_embd is None:
+            prefix_tokens = (
+                [self.ID_IM_START]
+                + tk_cached(f"system\n{context_key}")
+                + [self.ID_IM_END]
+                + [self.ID_IM_START]
+                + tk_cached("user\n")
+                + [self.ID_AUDIO_START]
+            )
+            prefix_embd = self.embedding_table[prefix_tokens]
+            self._prefix_embd_cache[context_key] = prefix_embd
+
+        suffix_key = language or ""
+        suffix_head_embd = self._suffix_head_embd_cache.get(suffix_key)
+        if suffix_head_embd is None:
+            suffix_head = "assistant\n"
+            if language:
+                suffix_head += f"language {language}"
+            suffix_head_tokens = (
+                [self.ID_AUDIO_END]
+                + [self.ID_IM_END]
+                + [self.ID_IM_START]
+                + tk_cached(suffix_head)
+                + [self.ID_ASR_TEXT]
+            )
+            suffix_head_embd = self.embedding_table[suffix_head_tokens]
+            self._suffix_head_embd_cache[suffix_key] = suffix_head_embd
+        prompt_static_time = time.perf_counter() - t_static_start
+
+        t_history_tokenize_start = time.perf_counter()
+        history_tokens = tk_cached(prefix_text) if prefix_text else []
+        prompt_history_tokenize_time = time.perf_counter() - t_history_tokenize_start
+
+        t_history_embed_start = time.perf_counter()
+        if history_tokens:
+            history_embd = self.embedding_table[history_tokens]
+        else:
+            history_embd = np.empty((0, self.model.n_embd), dtype=np.float32)
+        prompt_history_embed_time = time.perf_counter() - t_history_embed_start
+
+        t_concat_start = time.perf_counter()
+        total_embd = np.concatenate(
+            [
+                prefix_embd,
+                audio_embd.astype(np.float32, copy=False),
+                suffix_head_embd,
+                history_embd,
+            ],
+            axis=0,
         )
+        prompt_concat_time = time.perf_counter() - t_concat_start
 
-        # 2. 区块 B: 音频之后的所有内容 (Instruction + Assistant Header + History)
-        suffix_head = f"assistant\n"
-        if language:
-            suffix_head += f"language {language}"
+        prompt_metrics = {
+            "prompt_build_time": time.perf_counter() - t_prompt_start,
+            "prompt_static_time": prompt_static_time,
+            "prompt_history_tokenize_time": prompt_history_tokenize_time,
+            "prompt_history_embed_time": prompt_history_embed_time,
+            "prompt_concat_time": prompt_concat_time,
+            "prompt_prefix_tokens": int(prefix_embd.shape[0]),
+            "prompt_suffix_tokens": int(suffix_head_embd.shape[0]),
+            "prompt_history_tokens": len(history_tokens),
+        }
 
-        suffix_tokens = (
-            [self.ID_AUDIO_END]
-            + [self.ID_IM_END]
-            + [self.ID_IM_START]
-            + tk(suffix_head)
-            + [self.ID_ASR_TEXT]
-            + tk(prefix_text)
-        )
-
-        # 3. 统计并拼接
-        n_pre, n_aud, n_suf = (
-            len(prefix_tokens),
-            audio_embd.shape[0],
-            len(suffix_tokens),
-        )
-        total_embd = np.zeros(
-            (n_pre + n_aud + n_suf, self.model.n_embd), dtype=np.float32
-        )
-
-        total_embd[:n_pre] = self.embedding_table[prefix_tokens]
-        total_embd[n_pre : n_pre + n_aud] = audio_embd
-        total_embd[n_pre + n_aud :] = self.embedding_table[suffix_tokens]
-
-        return total_embd
+        return total_embd, prompt_metrics
 
     def _decode(
         self,
@@ -373,6 +414,14 @@ class QwenASREngine:
             "decode_tokens": 0,
             "encode_time": 0.0,
             "align_time": 0.0,
+            "prompt_build_time": 0.0,
+            "prompt_static_time": 0.0,
+            "prompt_history_tokenize_time": 0.0,
+            "prompt_history_embed_time": 0.0,
+            "prompt_concat_time": 0.0,
+            "prompt_prefix_tokens": 0,
+            "prompt_suffix_tokens": 0,
+            "prompt_history_tokens": 0,
         }
         t_main_start = time.time()
 
@@ -395,9 +444,21 @@ class QwenASREngine:
             combined_audio = np.concatenate(
                 [m[0] for m in asr_memory] + [audio_feature], axis=0
             )
-            full_embd = self._build_prompt_embd(
+            full_embd, prompt_metrics = self._build_prompt_embd(
                 combined_audio, prefix_text, context, language
             )
+            stats["prompt_build_time"] += prompt_metrics["prompt_build_time"]
+            stats["prompt_static_time"] += prompt_metrics["prompt_static_time"]
+            stats["prompt_history_tokenize_time"] += prompt_metrics[
+                "prompt_history_tokenize_time"
+            ]
+            stats["prompt_history_embed_time"] += prompt_metrics[
+                "prompt_history_embed_time"
+            ]
+            stats["prompt_concat_time"] += prompt_metrics["prompt_concat_time"]
+            stats["prompt_prefix_tokens"] += prompt_metrics["prompt_prefix_tokens"]
+            stats["prompt_suffix_tokens"] += prompt_metrics["prompt_suffix_tokens"]
+            stats["prompt_history_tokens"] += prompt_metrics["prompt_history_tokens"]
 
             # 带熔断加温重试的解码调用
             res = self._safe_decode(
